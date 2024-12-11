@@ -13,41 +13,96 @@
             height: 100vh;
             margin: 0;
             font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        .video-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
         }
         video {
-            width: 550px;
-            height: 350px;
+            width: 450px;
+            height: 300px;
             margin: 10px;
-            border: 1px solid black;
+            border-radius: 10px;
+            border: 2px solid #333;
+            background-color: black;
         }
         video#localVideo {
             transform: scaleX(-1);
         }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007BFF;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        input[type="range"] {
+            margin-top: 5px;
+            width: 150px;
+        }
     </style>
 </head>
 <body>
-    <h1>WebRTC Video Chat</h1>
-    <video id="localVideo" autoplay muted></video>
-    <video id="remoteVideo" autoplay></video>
+    <h1>LetsMeet-Video Chat</h1>
+    <div class="video-container">
+        <video id="localVideo" autoplay muted></video>
+        <video id="remoteVideo" autoplay></video>
+    </div>
+    <div class="controls">
+        <button id="muteButton">Mute</button>
+        <div class="slider-container">
+            <label for="volumeSlider">Volume</label>
+            <input type="range" id="volumeSlider" min="0" max="100" value="100">
+        </div>
+        <div class="slider-container">
+            <label for="saturationSlider">Saturation</label>
+            <input type="range" id="saturationSlider" min="0" max="200" value="100">
+        </div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const localVideo = document.getElementById("localVideo");
         const remoteVideo = document.getElementById("remoteVideo");
+        const muteButton = document.getElementById("muteButton");
+        const volumeSlider = document.getElementById("volumeSlider");
+        const saturationSlider = document.getElementById("saturationSlider");
 
         const socket = io();
         const peerConnection = new RTCPeerConnection({
-    iceServers: [
-        { urls: "stun:stun.l.google.com:19302" }, // Google's public STUN server
-        {
-            urls: "turn:relay.metered.ca:80",
-            username: "open",
-            credential: "open"
-        }
-    ]
-});
+            iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                {
+                    urls: "turn:relay.metered.ca:80",
+                    username: "open",
+                    credential: "open"
+                }
+            ]
+        });
 
-
+        let localStream;
+        let isMuted = false;
 
         // Handle ICE candidates
         peerConnection.onicecandidate = (event) => {
@@ -64,6 +119,7 @@
         // Get local video stream
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then((stream) => {
+                localStream = stream;
                 localVideo.srcObject = stream;
                 stream.getTracks().forEach((track) => {
                     peerConnection.addTrack(track, stream);
@@ -100,6 +156,25 @@
 
         // Create offer after socket connects
         socket.on("connect", createOffer);
+
+        // Mute/unmute functionality
+        muteButton.addEventListener("click", () => {
+            isMuted = !isMuted;
+            localStream.getAudioTracks().forEach((track) => (track.enabled = !isMuted));
+            muteButton.textContent = isMuted ? "Unmute" : "Mute";
+        });
+
+        // Volume control
+        volumeSlider.addEventListener("input", (event) => {
+            const volume = event.target.value / 100;
+            remoteVideo.volume = volume;
+        });
+
+        // Saturation control
+        saturationSlider.addEventListener("input", (event) => {
+            const saturation = event.target.value;
+            remoteVideo.style.filter = `saturate(${saturation}%)`;
+        });
     </script>
 </body>
 </html>
