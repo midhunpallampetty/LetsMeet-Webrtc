@@ -123,6 +123,7 @@
 
         let localStream;
         let isMuted = false;
+        let videoSender;
 
         // Handle ICE candidates
         peerConnection.onicecandidate = (event) => {
@@ -142,7 +143,7 @@
                 localStream = stream;
                 localVideo.srcObject = stream;
                 stream.getTracks().forEach((track) => {
-                    peerConnection.addTrack(track, stream);
+                    videoSender = peerConnection.addTrack(track, stream);
                 });
             })
             .catch((error) => console.error("Error accessing media devices.", error));
@@ -195,6 +196,46 @@
             const saturation = event.target.value;
             remoteVideo.style.filter = `saturate(${saturation}%)`;
         });
+
+        // Adaptive bitrate adjustment
+        async function setAdaptiveBitrate(sender, minBitrate, maxBitrate) {
+            const parameters = sender.getParameters();
+            if (!parameters.encodings) {
+                parameters.encodings = [{}];
+            }
+
+            parameters.encodings[0].maxBitrate = maxBitrate * 1000; // Convert to bps
+            parameters.encodings[0].minBitrate = minBitrate * 1000; // Convert to bps
+
+            try {
+                await sender.setParameters(parameters);
+                console.log(`Set bitrate: min=${minBitrate}kbps, max=${maxBitrate}kbps`);
+            } catch (error) {
+                console.error("Failed to set bitrate:", error);
+            }
+        }
+
+        async function monitorNetworkAndAdjustBitrate() {
+            const stats = await peerConnection.getStats(null);
+            stats.forEach((report) => {
+                if (report.type === "outbound-rtp" && report.kind === "video") {
+                    const currentBitrate = (report.bytesSent * 8) / (report.timestamp - (report.timestamp || 0));
+
+                    console.log(`Current bitrate: ${currentBitrate}bps`);
+
+                    if (currentBitrate < 500000) {
+                        setAdaptiveBitrate(videoSender, 300, 600); // Lower bitrate
+                    } else if (currentBitrate > 1500000) {
+                        setAdaptiveBitrate(videoSender, 800, 2000); // Higher bitrate
+                    }
+                }
+            });
+
+            setTimeout(monitorNetworkAndAdjustBitrate, 5000); // Run every 5 seconds
+        }
+
+        // Start monitoring network
+        monitorNetworkAndAdjustBitrate();
     </script>
 </body>
 </html>
